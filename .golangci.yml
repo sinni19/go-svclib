@@ -1,0 +1,43 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - contextcheck
+    - errorlint
+    - gochecknoglobals
+    - gochecknoinits
+    - gocritic
+    - gosec
+    - misspell
+    - noctx
+    - revive
+    - sloglint
+    - unconvert
+    - wrapcheck
+  settings:
+    misspell:
+      locale: US
+    sloglint:
+      kv-only: false
+      attr-only: false
+      context: scope
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - gochecknoglobals
+          - wrapcheck
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/sinni19/go-svclib

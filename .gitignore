@@ -1,0 +1,21 @@
+# Binaries and build output
+/bin/
+/dist/
+*.exe
+*.test
+
+# Test and coverage output
+*.out
+coverage.*
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store
+
+# Local env files
+.env
+*.local.env
+
+# ignore CLAUDE.md file
+.claude/
