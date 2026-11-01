@@ -33,6 +33,7 @@ var (
 	errShutdownRequested = errors.New("svc: shutdown requested")
 	errSignal            = errors.New("svc: signal received")
 	errPanic             = errors.New("svc: panic")
+	errAbandoned         = errors.New("abandoned")
 )
 
 var (
@@ -84,6 +85,7 @@ func New(opts ...Option) (*App, error) {
 		startupTimeout:  e.StartupTimeout,
 		drainDelay:      e.DrainDelay,
 		shutdownTimeout: e.ShutdownTimeout,
+		hookGracePeriod: e.HookGracePeriod,
 		handleSignals:   e.HandleSignals,
 	}
 
@@ -154,6 +156,10 @@ func validate(o *options) (slog.Level, svclog.Format, error) {
 
 	if o.shutdownTimeout <= 0 {
 		invalid("shutdown timeout %v must be positive", o.shutdownTimeout)
+	}
+
+	if o.hookGracePeriod <= 0 {
+		invalid("hook grace period %v must be positive", o.hookGracePeriod)
 	}
 
 	seen := make(map[string]bool, len(o.services))
@@ -358,26 +364,61 @@ func (a *App) callerCtx() context.Context {
 	return context.Background()
 }
 
-// call runs one hook. A panic becomes an error; its stack goes to the log only.
-// A hook that returns nil after its context ended during the call still fails,
-// so a timeout is never silent. A context that ended before the call does not
-// fail the hook: the timeout belongs to an earlier hook, and stop hooks must
-// still run.
-func (a *App) call(ctx context.Context, s Service, hook string, fn func(context.Context) error) (err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			err = fmt.Errorf("service %q: %s: %w: %v", s.Name(), hook, errPanic, r)
-			a.logger.ErrorContext(ctx, "hook panicked", "service", s.Name(), "hook", hook, "panic", r, "stack", string(debug.Stack()))
-		}
-	}()
+// call runs one hook and waits at most until ctx ends.
+//
+// A hook that is still running when ctx ends is abandoned: call returns a
+// timeout error and the hook's goroutine keeps running until it returns or the
+// process exits. A hook that returns nil after ctx ended also fails, so a
+// timeout is never silent.
+//
+// If ctx already ended before the call, the deadline belongs to an earlier
+// hook. The hook still runs, so that it can release its resources, with a
+// fresh HookGracePeriod budget.
+//
+// A panic becomes an error; its stack goes to the log only.
+func (a *App) call(ctx context.Context, s Service, hook string, fn func(context.Context) error) error {
+	if ctx.Err() != nil {
+		var cancel context.CancelFunc
 
-	endedBefore := ctx.Err() != nil
-
-	if err := fn(ctx); err != nil {
-		return fmt.Errorf("service %q: %s: %w", s.Name(), hook, err)
+		ctx, cancel = context.WithTimeout(context.WithoutCancel(ctx), a.opts.hookGracePeriod)
+		defer cancel()
 	}
 
-	if err := ctx.Err(); err != nil && !endedBefore {
+	result := make(chan error, 1) // buffered: an abandoned hook must not block on send
+
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				a.logger.ErrorContext(ctx, "hook panicked",
+					"service", s.Name(), "hook", hook, "panic", r, "stack", string(debug.Stack()))
+				result <- fmt.Errorf("%w: %v", errPanic, r)
+			}
+		}()
+
+		result <- fn(ctx)
+	}()
+
+	var err error
+
+	select {
+	case err = <-result:
+	case <-ctx.Done():
+		// select picks at random when both are ready; a finished hook is not abandoned.
+		select {
+		case err = <-result:
+		default:
+			a.logger.ErrorContext(ctx, "hook abandoned: still running at its deadline",
+				"service", s.Name(), "hook", hook, "cause", context.Cause(ctx))
+
+			return fmt.Errorf("service %q: %s: %w: %w", s.Name(), hook, errAbandoned, ctx.Err())
+		}
+	}
+
+	if err == nil {
+		err = ctx.Err()
+	}
+
+	if err != nil {
 		return fmt.Errorf("service %q: %s: %w", s.Name(), hook, err)
 	}
 

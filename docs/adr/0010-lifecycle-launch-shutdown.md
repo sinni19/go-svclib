@@ -27,4 +27,13 @@ The App runs several services and later owns listeners, pools, consumers, and jo
 ## Consequences
 
 - `svc.Main(app)` is the only `os.Exit`.
-- Hooks run synchronously. A hook that ignores its context delays `Launch` past the configured timeout; the timeout is still reported as an error when the hook returns.
+
+## Hook deadlines
+
+Each hook runs in its own goroutine. The App waits until the hook returns or its phase deadline (`StartupTimeout` or `ShutdownTimeout`) passes.
+
+- A hook still running at the deadline is **abandoned**: the App logs `hook abandoned` and returns a timeout error. The hook's goroutine keeps running until it returns or the process exits. `Launch` and `Shutdown` therefore always return on time, also when a hook ignores its context.
+- All stop hooks share one deadline. A stop hook that starts after the deadline passed gets a new budget of `HookGracePeriod` (default 2s), with the values of the original context, so that every service can still release its resources. Total shutdown time is at most `ShutdownTimeout` plus one `HookGracePeriod` for each later service.
+- A hook that returns nil after its deadline still fails, so a timeout is never silent.
+
+Trade-off: an abandoned hook can still change shared state while the App stops. Services must respect their context; abandonment is a safety net, not the normal path.

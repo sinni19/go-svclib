@@ -158,6 +158,7 @@ Two listeners. Operator endpoints are never on the app port.
 |---|---|
 | Startup deadline | `StartupTimeout`, default 30s |
 | Shutdown deadline | `ShutdownTimeout`, default 25s (less than `terminationGracePeriodSeconds`) |
+| Hook deadline (Confirmed) | A hook still running at its deadline is abandoned (logged, timeout error). A stop hook that starts after the deadline gets `HookGracePeriod` (default 2s). See ADR 0010. |
 | Start and stop (Confirmed) | `Launch()` blocks until stopped. `Shutdown(ctx)` requests a stop and waits; its ctx can shorten drain and stop. `Status()` reports the state. |
 | Signals (Confirmed) | `Launch` stops on SIGINT and SIGTERM; `HandleSignals(false)` turns this off. |
 | Startup failure (Confirmed) | Every service whose `OnInit` succeeded gets `OnStop`, in reverse order. |

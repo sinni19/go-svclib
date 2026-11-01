@@ -51,7 +51,10 @@ type fakeService struct {
 	panicIn                    string
 	// block makes the named hook wait until its context ends, then return nil.
 	block string
-	deps  *Deps
+	// hang makes the named hook ignore its context and wait until release is closed.
+	hang    string
+	release chan struct{}
+	deps    *Deps
 }
 
 func (f *fakeService) Name() string { return f.name }
@@ -69,7 +72,24 @@ func (f *fakeService) hook(ctx context.Context, name string, err error) error {
 		return nil
 	}
 
+	if f.hang == name {
+		<-f.release
+
+		return nil
+	}
+
 	return err
+}
+
+// hanging returns a service whose hook ignores its context. Closing the
+// returned channel ends the abandoned goroutine so that goleak stays clean.
+func hanging(t *testing.T, name, hook string, rec *recorder) *fakeService {
+	t.Helper()
+
+	release := make(chan struct{})
+	t.Cleanup(func() { close(release) })
+
+	return &fakeService{name: name, rec: rec, hang: hook, release: release}
 }
 
 func (f *fakeService) OnInit(ctx context.Context, d *Deps) error {
@@ -278,6 +298,114 @@ func TestShutdownTimeoutBlamesOnlyTheSlowService(t *testing.T) {
 
 	if got := rec.list(); !slices.Contains(got, "a.OnStop") {
 		t.Errorf("events = %v, want a.OnStop after the timeout", got)
+	}
+}
+
+func TestHookIgnoringContextIsAbandoned(t *testing.T) {
+	tests := []struct {
+		name string
+		hook string
+		opts []Option
+	}{
+		{name: "OnInit", hook: "OnInit", opts: []Option{StartupTimeout(30 * time.Millisecond)}},
+		{name: "OnStart", hook: "OnStart", opts: []Option{StartupTimeout(30 * time.Millisecond)}},
+		{name: "OnStop", hook: "OnStop", opts: []Option{ShutdownTimeout(30 * time.Millisecond)}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+
+			s := hanging(t, "stuck", tt.hook, &recorder{})
+			a := newApp(t, append(tt.opts, LogWriter(&buf), HookGracePeriod(30*time.Millisecond), Services(s))...)
+
+			res := make(chan error, 1)
+
+			go func() { res <- a.Launch() }()
+
+			if tt.hook == "OnStop" {
+				waitStatus(t, a, StatusRunning)
+
+				go func() { _ = a.Shutdown(context.Background()) }()
+			}
+
+			select {
+			case err := <-res:
+				if !errors.Is(err, errAbandoned) || !errors.Is(err, context.DeadlineExceeded) {
+					t.Errorf("Launch() error = %v, want abandoned + DeadlineExceeded", err)
+				}
+			case <-time.After(2 * time.Second):
+				t.Fatal("Launch is still waiting for a hook that ignores its context")
+			}
+
+			if !strings.Contains(buf.String(), "hook abandoned") {
+				t.Errorf("log lacks the abandon message: %s", buf.String())
+			}
+		})
+	}
+}
+
+func TestStopHooksRunAfterAnAbandonedStop(t *testing.T) {
+	rec := &recorder{}
+	a := newApp(t, ShutdownTimeout(30*time.Millisecond), HookGracePeriod(30*time.Millisecond), Services(
+		&fakeService{name: "first", rec: rec},
+		hanging(t, "second", "OnStop", rec), // starts after third.OnStop overran: gets a grace period
+		hanging(t, "third", "OnStop", rec),  // stops first and overruns the shutdown timeout
+	))
+
+	res := launch(t, a, StatusRunning)
+
+	start := time.Now()
+
+	go func() { _ = a.Shutdown(context.Background()) }()
+
+	err := <-res
+
+	// Shutdown is bounded: the shutdown timeout plus one grace period for the second hung hook.
+	if took := time.Since(start); took > time.Second {
+		t.Errorf("shutdown took %v, want it bounded by the timeouts", took)
+	}
+
+	for _, want := range []string{`service "third"`, `service "second"`} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("Launch() error = %v, want %s", err, want)
+		}
+	}
+
+	if strings.Contains(err.Error(), `service "first"`) {
+		t.Errorf("Launch() error = %v, blames a service that stopped cleanly", err)
+	}
+
+	want := []string{"first.OnInit", "second.OnInit", "third.OnInit", "first.OnStart", "second.OnStart", "third.OnStart",
+		"third.OnStop", "second.OnStop", "first.OnStop"}
+	if got := rec.list(); !slices.Equal(got, want) {
+		t.Errorf("events = %v, want %v", got, want)
+	}
+}
+
+func TestGracePeriodKeepsContextValues(t *testing.T) {
+	type key struct{}
+
+	ctx := context.WithValue(context.Background(), key{}, "v")
+
+	done, cancel := context.WithCancel(ctx)
+	cancel()
+
+	a := newApp(t)
+
+	var got any
+
+	err := a.call(done, &fakeService{name: "a", rec: &recorder{}}, "OnStop", func(ctx context.Context) error {
+		got = ctx.Value(key{})
+
+		return ctx.Err() // the grace context must not be done yet
+	})
+	if err != nil {
+		t.Errorf("call() error = %v, want nil: the grace period gives a live context", err)
+	}
+
+	if got != "v" {
+		t.Errorf("value = %v, want the values of the original context", got)
 	}
 }
 

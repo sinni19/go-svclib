@@ -26,6 +26,7 @@ type Env struct {
 	StartupTimeout  time.Duration `env:"STARTUP_TIMEOUT"  envDefault:"30s"`
 	DrainDelay      time.Duration `env:"DRAIN_DELAY"      envDefault:"5s"`
 	ShutdownTimeout time.Duration `env:"SHUTDOWN_TIMEOUT" envDefault:"25s"`
+	HookGracePeriod time.Duration `env:"HOOK_GRACE_PERIOD" envDefault:"2s"`
 
 	HandleSignals bool `env:"HANDLE_SIGNALS" envDefault:"true"`
 }

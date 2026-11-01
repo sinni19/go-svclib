@@ -20,6 +20,7 @@ type options struct {
 	startupTimeout  time.Duration
 	drainDelay      time.Duration
 	shutdownTimeout time.Duration
+	hookGracePeriod time.Duration
 	handleSignals   bool
 
 	services []Service
@@ -57,6 +58,12 @@ func DrainDelay(d time.Duration) Option { return func(o *options) { o.drainDelay
 // ShutdownTimeout limits OnStop of all services together
 // (env SVC_SHUTDOWN_TIMEOUT, default 25s).
 func ShutdownTimeout(d time.Duration) Option { return func(o *options) { o.shutdownTimeout = d } }
+
+// HookGracePeriod is the budget of a hook that starts after its phase timeout
+// already passed, for example an OnStop that follows an abandoned OnStop
+// (env SVC_HOOK_GRACE_PERIOD, default 2s). It lets each service release its
+// resources while shutdown time stays bounded.
+func HookGracePeriod(d time.Duration) Option { return func(o *options) { o.hookGracePeriod = d } }
 
 // HandleSignals controls whether Launch stops the App on SIGINT and SIGTERM
 // (env SVC_HANDLE_SIGNALS, default true).

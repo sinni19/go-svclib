@@ -26,6 +26,7 @@ func TestNewValidation(t *testing.T) {
 		{name: "zero startup timeout", opts: baseOpts(StartupTimeout(0)), wantErrs: []string{"startup timeout"}},
 		{name: "negative drain", opts: baseOpts(DrainDelay(-time.Second)), wantErrs: []string{"drain delay"}},
 		{name: "zero shutdown timeout", opts: baseOpts(ShutdownTimeout(0)), wantErrs: []string{"shutdown timeout"}},
+		{name: "zero hook grace period", opts: baseOpts(HookGracePeriod(0)), wantErrs: []string{"hook grace period"}},
 		{name: "nil service", opts: baseOpts(Services(nil)), wantErrs: []string{"service 0 is nil"}},
 		{name: "empty service name", opts: baseOpts(Services(&fakeService{rec: rec})), wantErrs: []string{"empty name"}},
 		{
