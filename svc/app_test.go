@@ -104,7 +104,7 @@ func (f *fakeService) OnStop(ctx context.Context) error  { return f.hook(ctx, "O
 func baseOpts(extra ...Option) []Option {
 	return append([]Option{
 		Name("test-app"), Version("1.0.0"), Commit("abc123"),
-		LogWriter(io.Discard), HandleSignals(false), DrainDelay(0),
+		LogWriter(io.Discard), HandleSignals(false), DrainDelay(0), Insecure(),
 	}, extra...)
 }
 

@@ -1,6 +1,7 @@
 package svc
 
 import (
+	"crypto/tls"
 	"io"
 	"time"
 )
@@ -22,6 +23,15 @@ type options struct {
 	shutdownTimeout time.Duration
 	hookGracePeriod time.Duration
 	handleSignals   bool
+
+	addr              string
+	tls               *tls.Config
+	insecure          bool
+	readHeaderTimeout time.Duration
+	idleTimeout       time.Duration
+	maxMessageBytes   int
+	rpcDefaultTimeout time.Duration
+	rpcMaxTimeout     time.Duration
 
 	services []Service
 }
@@ -68,6 +78,40 @@ func HookGracePeriod(d time.Duration) Option { return func(o *options) { o.hookG
 // HandleSignals controls whether Launch stops the App on SIGINT and SIGTERM
 // (env SVC_HANDLE_SIGNALS, default true).
 func HandleSignals(enabled bool) Option { return func(o *options) { o.handleSignals = enabled } }
+
+// Addr sets the listen address of the RPC server (env SVC_ADDR, default
+// ":8443"). The RPC server runs only when a service has handlers.
+func Addr(addr string) Option { return func(o *options) { o.addr = addr } }
+
+// TLS sets the TLS config of the RPC server. The config must have a
+// certificate source. The App uses a clone with TLS 1.2 or later.
+// One of TLS and Insecure is required.
+func TLS(cfg *tls.Config) Option { return func(o *options) { o.tls = cfg } }
+
+// Insecure makes the RPC server serve h2c and HTTP/1.1 without TLS. Use it
+// only for local development and tests, or behind a proxy that terminates
+// TLS on the same host. One of TLS and Insecure is required.
+func Insecure() Option { return func(o *options) { o.insecure = true } }
+
+// ReadHeaderTimeout limits the time to read the request headers
+// (env SVC_READ_HEADER_TIMEOUT, default 5s).
+func ReadHeaderTimeout(d time.Duration) Option { return func(o *options) { o.readHeaderTimeout = d } }
+
+// IdleTimeout closes keep-alive connections that are idle for d
+// (env SVC_IDLE_TIMEOUT, default 120s).
+func IdleTimeout(d time.Duration) Option { return func(o *options) { o.idleTimeout = d } }
+
+// MaxMessageBytes limits the size of one request message
+// (env SVC_MAX_MESSAGE_BYTES, default 4 MiB).
+func MaxMessageBytes(n int) Option { return func(o *options) { o.maxMessageBytes = n } }
+
+// RPCDefaultTimeout is the deadline of a unary call whose client sets none
+// (env SVC_RPC_DEFAULT_TIMEOUT, default 30s).
+func RPCDefaultTimeout(d time.Duration) Option { return func(o *options) { o.rpcDefaultTimeout = d } }
+
+// RPCMaxTimeout caps the deadline that a client sets on a unary call
+// (env SVC_RPC_MAX_TIMEOUT, default 60s). Streams have no cap.
+func RPCMaxTimeout(d time.Duration) Option { return func(o *options) { o.rpcMaxTimeout = d } }
 
 // Services adds services to the App. Hooks run in the order given; OnStop runs
 // in reverse order.

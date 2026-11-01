@@ -7,16 +7,22 @@ A Go library for production microservices. A service defines proto contracts and
 ## Example
 
 ```go
-type hello struct{ svc.BaseService }
+type greeter struct{ svc.BaseService }
 
-func (hello) Name() string { return "hello" }
+func (greeter) Name() string { return "greeter" }
+
+// Handlers must pass opts: they hold the interceptor chain.
+func (g greeter) Handlers(opts ...connect.HandlerOption) []svc.Handler {
+	return []svc.Handler{svc.NewHandler(greetv1connect.NewGreetServiceHandler(g, opts...))}
+}
 
 func main() {
 	app, err := svc.New(
-		svc.Name("hello-app"),
+		svc.Name("greeter-app"),
 		svc.Version("0.1.0"),
 		svc.Commit("dev"),
-		svc.Services(hello{}),
+		svc.TLS(tlsConfig), // or svc.Insecure() for local development
+		svc.Services(greeter{}),
 	)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -39,6 +45,8 @@ func main() {
 | Messaging | Kafka with franz-go |
 | Security | mTLS and JWT, fail-closed authorization |
 
+The App serves each RPC over gRPC, gRPC-Web, Connect, and REST (from `google.api.http` annotations) on port 8443.
+
 ## Requirements
 
 - Go 1.25 or later.
@@ -47,10 +55,12 @@ func main() {
 ## Development
 
 ```sh
-make test   # go test -race ./...
-make lint   # golangci-lint run
-make vuln   # govulncheck ./...
-make check  # all of the above
+make test        # go test -race ./...
+make lint        # golangci-lint run
+make vuln        # govulncheck ./...
+make proto       # buf format + buf generate into internal/gen
+make proto-lint  # buf lint, format check, generated code is current
+make check       # tidy, proto-lint, lint, test, vuln
 ```
 
 ## Documents

@@ -29,6 +29,13 @@ type Env struct {
 	HookGracePeriod time.Duration `env:"HOOK_GRACE_PERIOD" envDefault:"2s"`
 
 	HandleSignals bool `env:"HANDLE_SIGNALS" envDefault:"true"`
+
+	Addr              string        `env:"ADDR"                envDefault:":8443"`
+	ReadHeaderTimeout time.Duration `env:"READ_HEADER_TIMEOUT" envDefault:"5s"`
+	IdleTimeout       time.Duration `env:"IDLE_TIMEOUT"        envDefault:"120s"`
+	MaxMessageBytes   int           `env:"MAX_MESSAGE_BYTES"   envDefault:"4194304"`
+	RPCDefaultTimeout time.Duration `env:"RPC_DEFAULT_TIMEOUT" envDefault:"30s"`
+	RPCMaxTimeout     time.Duration `env:"RPC_MAX_TIMEOUT"     envDefault:"60s"`
 }
 
 // Load reads Env from environ, a map of full key names (with Prefix) to values.

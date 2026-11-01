@@ -26,6 +26,11 @@ linters:
       kv-only: false
       attr-only: false
       context: scope
+    wrapcheck:
+      # svcerr builds the errors that clients receive; wrapping them again
+      # would change the public message.
+      ignore-package-globs:
+        - github.com/sinni19/go-svclib/svcerr
   exclusions:
     rules:
       - path: _test\.go

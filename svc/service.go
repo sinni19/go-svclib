@@ -3,6 +3,9 @@ package svc
 import (
 	"context"
 	"log/slog"
+	"net/http"
+
+	"connectrpc.com/connect"
 )
 
 // Service is a unit of business logic that the App hosts.
@@ -30,6 +33,27 @@ type Service interface {
 	// Live reports whether the process is healthy. An error means the process
 	// cannot recover and must restart.
 	Live(ctx context.Context) error
+
+	// Handlers returns the RPC handlers of the service. The App calls it once,
+	// after every OnInit. Pass opts to each generated New<Service>Handler:
+	// they hold the App's interceptor chain, and Launch fails when a service
+	// ignores them.
+	Handlers(opts ...connect.HandlerOption) []Handler
+}
+
+// Handler is one Connect service handler.
+type Handler struct {
+	// Path is the service path, for example "/orders.v1.OrderService/".
+	Path string
+	HTTP http.Handler
+}
+
+// NewHandler returns a Handler from the results of a generated
+// New<Service>Handler function:
+//
+//	return []svc.Handler{svc.NewHandler(ordersv1connect.NewOrderServiceHandler(s, opts...))}
+func NewHandler(path string, h http.Handler) Handler {
+	return Handler{Path: path, HTTP: h}
 }
 
 // Deps holds the dependencies that the App gives to each service in OnInit.
@@ -56,3 +80,6 @@ func (BaseService) Ready(context.Context) error { return nil }
 
 // Live reports live.
 func (BaseService) Live(context.Context) error { return nil }
+
+// Handlers returns no handlers.
+func (BaseService) Handlers(...connect.HandlerOption) []Handler { return nil }
