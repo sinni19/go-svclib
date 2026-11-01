@@ -2,7 +2,30 @@
 
 A Go library for production microservices. A service defines proto contracts and business logic; go-svclib supplies transport, security, observability, datasources, messaging, and lifecycle.
 
-> **Status: pre-alpha.** No public API exists yet. See the [plan](docs/plan.md).
+> **Status: pre-alpha.** The API changes without notice before v1. See the [plan](docs/plan.md).
+
+## Example
+
+```go
+type hello struct{ svc.BaseService }
+
+func (hello) Name() string { return "hello" }
+
+func main() {
+	app, err := svc.New(
+		svc.Name("hello-app"),
+		svc.Version("0.1.0"),
+		svc.Commit("dev"),
+		svc.Services(hello{}),
+	)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	svc.Main(app) // blocks until SIGINT or SIGTERM
+}
+```
 
 ## Technology
 
