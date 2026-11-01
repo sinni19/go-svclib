@@ -83,7 +83,7 @@ Background: a study of existing Go microservice libraries, including GoFr (`gofr
 | Outbound resilience | **failsafe-go** (retry + backoff + jitter, breaker, timeout, bulkhead) | Proposed | One library for all policies |
 | Inbound rate limit | `golang.org/x/time/rate` (local); `go-redis/redis_rate` (distributed) | Proposed | Simple, known |
 | IDs | UUIDv7 (`google/uuid`) | Proposed | Time-ordered standard |
-| Env defaults | `caarlos0/env/v11` | Proposed | Typed struct |
+| Env defaults | `caarlos0/env/v11` | **Confirmed** | Typed struct |
 | CLI | `cmd/svclib` with stdlib `flag` + embedded template | Proposed | No CLI framework dependency |
 | Testing | `testing`, **testcontainers-go** (Postgres, Redis, Kafka/Redpanda), `goleak`, fuzzing | Proposed | Real dependencies in tests |
 | Lint and security | golangci-lint v2, govulncheck, gosec, CodeQL, `buf lint` | Proposed | — |
@@ -140,26 +140,30 @@ Two listeners. Operator endpoints are never on the app port.
 
 ```
  New() ── validate options, build objects (no I/O) ──────────────────────► Created
- Run(ctx)
+ Launch()   (blocks; one-shot)
    Created ─► Initializing  connect Postgres, Redis, Kafka (bounded retry);
                             migrations (opt-in); Service.OnInit in order
            ─► Starting      bind listeners (fail fast); Service.OnStart in order;
                             start consumers and scheduler
            ─► Running       readiness = true
-   signal / ctx done / fatal error
+   Shutdown(ctx) / SIGINT / SIGTERM
            ─► Draining      readiness = false; wait DrainDelay (default 5s)
            ─► Stopping      stop scheduler (wait running jobs); stop consumers (commit, leave group);
                             http.Server.Shutdown; Service.OnStop in reverse order;
                             flush producer; close pools; flush telemetry   (all under ShutdownTimeout)
-           ─► Stopped       Run returns
+           ─► Stopped       Launch returns
 ```
 
 | Rule | Value |
 |---|---|
 | Startup deadline | `StartupTimeout`, default 30s |
 | Shutdown deadline | `ShutdownTimeout`, default 25s (less than `terminationGracePeriodSeconds`) |
-| Exit | `Run` returns an error; `svc.Main` maps it to exit code 1. No `os.Exit` in library code. |
-| Re-run | `ErrAlreadyRun` |
+| Start and stop (Confirmed) | `Launch()` blocks until stopped. `Shutdown(ctx)` requests a stop and waits; its ctx can shorten drain and stop. `Status()` reports the state. |
+| Signals (Confirmed) | `Launch` stops on SIGINT and SIGTERM; `HandleSignals(false)` turns this off. |
+| Startup failure (Confirmed) | Every service whose `OnInit` succeeded gets `OnStop`, in reverse order. |
+| Exit | `Launch` returns an error; `svc.Main` maps it to exit code 1. `Main` is the only `os.Exit`. |
+| Re-launch (Confirmed) | One-shot: `ErrAlreadyLaunched`. |
+| Required config (Confirmed) | `Name`, `Version` (semver), `Commit`. |
 
 ### 4.4 Service extension API (Confirmed: one interface + base struct)
 
@@ -194,6 +198,8 @@ type BaseService struct{}
 | `Handlers`, `Consumers`, `Jobs` | none |
 | `Authorize` | **`PermissionDenied`** (fail-closed) |
 
+**Growth (Confirmed):** the interface grows phase by phase. Phase 1 has `Name`, the three hooks, `Ready`, and `Live`. `Handlers` and `Authorize` come in phases 2 and 5, `Consumers` in phase 6, `Jobs` in phase 7. Each addition also goes into `BaseService`, so services that embed it do not break.
+
 **Risk of the base pattern:** an override with a wrong signature is ignored without an error. Mitigations:
 
 1. The host logs, for each service at startup, which methods it overrides.
@@ -208,7 +214,8 @@ type BaseService struct{}
 func main() {
 	app, err := svc.New(
 		svc.Name("orders"),
-		svc.Version(version, commit),
+		svc.Version(version),
+		svc.Commit(commit),
 		svc.TLS(tlsx.FromFiles(cert, key, ca), tlsx.RequireClientCert()),
 		svc.JWT(auth.JWKS("https://idp.example.com/.well-known/jwks.json"), auth.Audience("orders")),
 		svc.Postgres(postgres.FromEnv(), postgres.Migrations(migrationsFS)),
@@ -354,7 +361,7 @@ Metric labels use the procedure, topic, or job name, never raw paths or IDs.
 |---|---|---|---|
 | **0. Foundations** | 1 | Repo, license, CI (lint, race, govulncheck, buf), ADRs for confirmed decisions | CI green; ADRs merged |
 | **1. Core host** | 2 | `svc` options, validation, state machine, `Service` + `BaseService`, `Main`, `log`, `config` | Lifecycle tests: order, deadlines, re-run, goleak clean |
-| **2. Transport** | 3 | Connect + Vanguard, TLS/h2c, timeouts, interceptors 1–5, 9, `svcerr`, `examples/orders` skeleton | Same RPC over gRPC, Connect, REST; unary and stream through all interceptors |
+| **2. Transport** | 3 | Connect + Vanguard, TLS/h2c, timeouts, interceptors 1–5, 9, `svcerr` | Same RPC over gRPC, Connect, REST; unary and stream through all interceptors |
 | **3. Observability** | 2 | `telemetry`, admin server, health, gRPC health, pprof, log-level API | Traces in local collector; metrics scraped; probes pass in kind |
 | **4. Postgres + Redis** | 3 | `postgres` (pool, InTx, goose, health, otel), `redis` (client, health, otel, lock), `svctest` | Integration tests with containers; fail-fast startup |
 | **5. Security** | 2 | mTLS + reload, JWT/JWKS, `Principal`, authn/authz interceptors, RBAC helper, rate limit, admin authz | Security suite: no token, expired, wrong audience, bad cert, wrong role |
@@ -362,7 +369,7 @@ Metric labels use the procedure, topic, or job name, never raw paths or IDs.
 | **7. Scheduled jobs** | 2 | Cron parsing, scheduler, Redis lock with renewal, telemetry | Multi-replica test: one run per tick; lease-loss cancels the job |
 | **8. Outbound clients** | 2 | `client` with failsafe policies, OTel, deadline propagation | Fault-injection: retry only idempotent; breaker opens and recovers |
 | **9. Template + CLI** | 2 | `cmd/svclib`, template, dashboards, alerts, k8s manifests | New service passes CI and deploys to kind in < 15 min |
-| **10. Hardening** | 3 | Fuzzing, load (ghz, k6), 24h soak, chaos (kill DB, Redis, broker), docs site | Performance budget met; no leaks; docs complete |
+| **10. Hardening** | 3 | `examples/orders` reference service, Fuzzing, load (ghz, k6), 24h soak, chaos (kill DB, Redis, broker), docs site | Performance budget met; no leaks; docs complete |
 | **11. Beta → GA** | 4 | Two pilot services in staging, then production; API freeze; external security review | GA checklist (§7) complete |
 
 **Total: about 29 weeks (about 7 months).** Phases 6–8 can run in parallel with a third engineer after phase 5, which saves about 3 weeks.

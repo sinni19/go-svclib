@@ -13,5 +13,6 @@ Each ADR records one decision: context, decision, and consequences. An ADR is no
 | [0007](0007-messaging-kafka-franz-go.md) | Messaging: Kafka with franz-go | Accepted |
 | [0008](0008-scheduled-jobs-redis-lock.md) | Scheduled jobs: Redis lock with TTL | Accepted |
 | [0009](0009-single-module-and-config.md) | One Go module; options in code with env defaults | Accepted |
+| [0010](0010-lifecycle-launch-shutdown.md) | Lifecycle: Launch, Shutdown, and rollback | Accepted |
 
 Template: [template.md](template.md).
