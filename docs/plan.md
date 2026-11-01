@@ -89,7 +89,7 @@ Background: a study of existing Go microservice libraries, including GoFr (`gofr
 | Lint and security | golangci-lint v2, govulncheck, gosec, CodeQL, `buf lint` | Proposed | — |
 | API compatibility | `gorelease` (apidiff) | Proposed | Blocks breaking changes after v1 |
 | Release | GoReleaser, Syft SBOM, Cosign | Proposed | Supply-chain evidence |
-| Dependency updates | Renovate | Proposed | — |
+| Dependency updates | Dependabot (Go modules, GitHub Actions; weekly, grouped) | **Confirmed** | Built into GitHub; no app to install |
 
 ---
 
