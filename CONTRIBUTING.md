@@ -14,12 +14,17 @@
 ## Commits
 
 ```
-Title in imperative mood, max 72 characters
+<type>(<scope>): <short summary>
 
-Description: what changes and why.
+<optional body: what changes and why>
+
+<optional footer>
 ```
+
+`<type>` is one of `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`. `<scope>` is the package or area, for example `svc` or `config`.
 
 ## Pull requests
 
+- Branch names start with `sinni19/`, for example `sinni19/fix-foo`.
 - Target branch: `main`.
 - CI must pass: lint, race tests, govulncheck.
