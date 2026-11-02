@@ -12,12 +12,13 @@ The library is built phase by phase. `docs/plan.md` holds the architecture, tech
 
 ```sh
 make test    # go test -race -count=1 ./...
+make cover   # coverage gate: >= 85% for each package and the total
 make lint    # golangci-lint run (v2.15.0)
 make vuln    # govulncheck
 make tidy    # go mod tidy; fails if go.mod or go.sum change
 make proto   # buf format + generate (proto/ -> internal/gen)
 make proto-lint  # buf lint, format check, generated code is current
-make check   # tidy + proto-lint + lint + test + vuln
+make check   # tidy + proto-lint + lint + cover + vuln
 
 go test -race -count=1 -run 'TestName' ./svc   # one test
 ```
@@ -47,7 +48,7 @@ Packages that exist: `svc` (App, options, lifecycle, `Service`), `config` (env d
 - Every goroutine has an owner and a stop path. Tests use `goleak`; a test that abandons a goroutine must release it.
 - Wrap errors from other packages (`wrapcheck`). Use `errors.Is`/`As` (`errorlint`).
 - Exported identifiers have a doc comment that follows https://go.dev/doc/comment.
-- Prefer table-driven tests. New code has tests.
+- Prefer table-driven tests. New code has tests. Coverage must stay at 85% or more for each package and the total; CI fails otherwise. `-coverpkg=./...` counts coverage from tests in other packages. `internal/tools/covercheck` is the gate.
 - An architecture change needs an ADR in `docs/adr/` (template: `docs/adr/template.md`). Update the plan when a decision changes.
 - Write all code from scratch. Do not copy from gofr, svclib, or other libraries unless the license allows it and the source is credited.
 - Commit message: `<type>(<scope>): <short summary>`, with an optional body and footer. Types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`. Example: `feat(svc): add hook grace period`.

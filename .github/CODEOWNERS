@@ -1,0 +1,5 @@
+# Code owners review every pull request for the paths they own.
+# The last matching pattern takes precedence.
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+* @sinni19

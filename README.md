@@ -56,11 +56,12 @@ The App serves each RPC over gRPC, gRPC-Web, Connect, and REST (from `google.api
 
 ```sh
 make test        # go test -race ./...
+make cover       # tests with coverage; fails below 85% for a package or the total
 make lint        # golangci-lint run
 make vuln        # govulncheck ./...
 make proto       # buf format + buf generate into internal/gen
 make proto-lint  # buf lint, format check, generated code is current
-make check       # tidy, proto-lint, lint, test, vuln
+make check       # tidy, proto-lint, lint, cover, vuln
 ```
 
 ## Documents

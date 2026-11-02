@@ -299,6 +299,23 @@ func must[T any](v T, err error) T {
 	return v
 }
 
+func TestMaxMessageBytes(t *testing.T) {
+	_, url := startEcho(t, io.Discard, MaxMessageBytes(64))
+	big := strings.Repeat("x", 90)
+
+	code, _ := postJSON(t, url+"/v1/echo", `{"message":"`+big+`"}`)
+	if code != http.StatusTooManyRequests {
+		t.Errorf("REST status = %d, want 429 (ResourceExhausted)", code)
+	}
+
+	c := testv1connect.NewEchoServiceClient(h2cClient(), url, connect.WithGRPC())
+
+	_, err := c.Echo(t.Context(), connect.NewRequest(&testv1.EchoRequest{Message: big}))
+	if connect.CodeOf(err) != connect.CodeResourceExhausted {
+		t.Errorf("gRPC error = %v, want ResourceExhausted", err)
+	}
+}
+
 func TestStreamInterceptors(t *testing.T) {
 	logs := new(syncBuffer)
 	_, url := startEcho(t, logs)

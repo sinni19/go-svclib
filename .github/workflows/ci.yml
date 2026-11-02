@@ -29,16 +29,16 @@ jobs:
           go-version: ${{ matrix.go }}
       - run: go mod tidy && git diff --exit-code -- go.mod go.sum
       - run: go vet ./...
-      - run: go test -race -count=1 -covermode=atomic -coverprofile=coverage.out ./...
-      - name: Coverage summary
-        if: matrix.go == '1.26'
+      - run: go test -race -count=1 -covermode=atomic -coverpkg=./... -coverprofile=coverage.out ./...
+      - name: Coverage gate (85% for each package and total)
         run: |
+          set -o pipefail
           {
             echo '### Coverage'
             echo '```'
-            go tool cover -func=coverage.out
+            go run ./internal/tools/covercheck -min 85 -exclude /internal/gen/ coverage.out
             echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v7
         if: matrix.go == '1.26'
         with:
@@ -62,10 +62,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.26"
       - run: make proto-lint

@@ -381,7 +381,7 @@ Metric labels use the procedure, topic, or job name, never raw paths or IDs.
 
 | Level | Tooling | Gate |
 |---|---|
-| Unit | `go test -race`, table tests | ≥ 85% coverage on core packages |
+| Unit | `go test -race`, table tests | ≥ 85% statement coverage for each package and the total (`make cover`, CI gate); generated code excluded |
 | Leak | `goleak.VerifyTestMain` in each package | Must pass |
 | Integration | testcontainers-go: Postgres, Redis, Kafka (Redpanda), OTel collector | Must pass in CI |
 | Contract | `buf breaking` | Must pass |

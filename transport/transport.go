@@ -27,7 +27,9 @@ type Route struct {
 
 // NewHandler returns one handler for all routes. Each route path must be the
 // path of a service whose proto descriptor is registered, which the generated
-// code does. maxMessageBytes limits each message that REST transcoding buffers.
+// code does. maxMessageBytes limits each message that Vanguard buffers to
+// transcode. A request that Vanguard passes through unbuffered is limited only
+// by the route handler, so build handlers with connect.WithReadMaxBytes.
 func NewHandler(routes []Route, maxMessageBytes uint32) (http.Handler, error) {
 	services := make([]*vanguard.Service, 0, len(routes))
 	seen := make(map[string]bool, len(routes))
