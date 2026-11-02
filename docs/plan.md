@@ -57,11 +57,11 @@ Background: a study of existing Go microservice libraries, including GoFr (`gofr
 | Job | Selection | Status | Reason |
 |---|---|---|---|
 | Language | Go 1.25 minimum (`go.mod`); support N and N-1 | **Confirmed** | Current stable |
-| Contracts | Protobuf + **Buf CLI** (`generate`, `lint`, `breaking`) | Proposed | Lint and breaking-change gate in CI |
+| Contracts | Protobuf + **Buf CLI** v1.69.0 (`generate`, `lint`, `format`, `breaking`); generated code committed | **Confirmed** | Lint and breaking-change gate in CI |
 | RPC transport | **ConnectRPC** (`connectrpc.com/connect`) | **Confirmed** | gRPC, gRPC-Web, Connect on `net/http`; one interceptor API for unary and stream |
 | REST/JSON | **Vanguard** (`connectrpc.com/vanguard`) + `google.api.http` annotations | **Confirmed** | REST on the same handlers and interceptors, no loopback hop. Risk: pre-1.0 (see §9) |
-| HTTP server | `net/http`, HTTP/2 with TLS, h2c without TLS | Proposed | Standard library |
-| Input validation | **protovalidate** | Proposed | Rules in proto; same for all clients |
+| HTTP server | `net/http`, HTTP/2 with TLS; h2c only with `svc.Insecure()` | **Confirmed** | Standard library; plaintext is opt-in (ADR 0011) |
+| Input validation | **protovalidate** | **Confirmed** | Rules in proto; same for all clients |
 | Logging | **`log/slog`** JSON + trace correlation + `slog.LevelVar` | **Confirmed** | Standard library, runtime level |
 | Tracing | **OpenTelemetry** SDK, OTLP exporter | **Confirmed** (with metrics) | Vendor neutral |
 | Metrics | **OpenTelemetry** SDK; **Prometheus pull** on admin port + optional **OTLP push** | **Confirmed** | One API, both export modes |
@@ -198,6 +198,8 @@ type BaseService struct{}
 | `Ready`, `Live` | `nil` (healthy) |
 | `Handlers`, `Consumers`, `Jobs` | none |
 | `Authorize` | **`PermissionDenied`** (fail-closed) |
+
+**Phase 2 (Confirmed):** `Handlers(opts...)` receives the App's interceptor chain in `opts`. `Launch` fails when a service builds its handlers without `opts`. See ADR 0011.
 
 **Growth (Confirmed):** the interface grows phase by phase. Phase 1 has `Name`, the three hooks, `Ready`, and `Live`. `Handlers` and `Authorize` come in phases 2 and 5, `Consumers` in phase 6, `Jobs` in phase 7. Each addition also goes into `BaseService`, so services that embed it do not break.
 
@@ -379,7 +381,7 @@ Metric labels use the procedure, topic, or job name, never raw paths or IDs.
 
 | Level | Tooling | Gate |
 |---|---|
-| Unit | `go test -race`, table tests | ≥ 85% coverage on core packages |
+| Unit | `go test -race`, table tests | ≥ 85% statement coverage for each package and the total (`make cover`, CI gate); generated code excluded |
 | Leak | `goleak.VerifyTestMain` in each package | Must pass |
 | Integration | testcontainers-go: Postgres, Redis, Kafka (Redpanda), OTel collector | Must pass in CI |
 | Contract | `buf breaking` | Must pass |
@@ -444,6 +446,8 @@ Metric labels use the procedure, topic, or job name, never raw paths or IDs.
 
 ## 10. Open decisions (need owner confirmation)
 
+Confirmed decisions move out of this table. D15 (ports and probe paths: app 8443, admin 9090, `/livez`, `/readyz`) is confirmed in ADR 0011.
+
 | ID | Decision | Proposal | Needed before |
 |---|---|---|---|
 | D6 | Minimum Kubernetes version (Go 1.25 is Confirmed) | Kubernetes 1.30+ | Phase 9 |
@@ -455,5 +459,4 @@ Metric labels use the procedure, topic, or job name, never raw paths or IDs.
 | D12 | Cron parser | robfig/cron/v3 parser only | Phase 7 |
 | D13 | Outbound resilience library | failsafe-go | Phase 8 |
 | D14 | CLI framework | stdlib `flag` | Phase 9 |
-| D15 | Ports and probe paths | App 8443, admin 9090, `/livez`, `/readyz` | Phase 2 |
 | D16 | Test broker image | Redpanda (Kafka API compatible, fast start) | Phase 6 |

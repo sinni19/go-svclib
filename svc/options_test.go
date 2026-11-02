@@ -1,6 +1,7 @@
 package svc
 
 import (
+	"crypto/tls"
 	"errors"
 	"strings"
 	"testing"
@@ -27,6 +28,21 @@ func TestNewValidation(t *testing.T) {
 		{name: "negative drain", opts: baseOpts(DrainDelay(-time.Second)), wantErrs: []string{"drain delay"}},
 		{name: "zero shutdown timeout", opts: baseOpts(ShutdownTimeout(0)), wantErrs: []string{"shutdown timeout"}},
 		{name: "zero hook grace period", opts: baseOpts(HookGracePeriod(0)), wantErrs: []string{"hook grace period"}},
+		{name: "no TLS and not insecure", opts: withoutInsecure(baseOpts()), wantErrs: []string{"TLS is required"}},
+		{name: "TLS and insecure", opts: baseOpts(TLS(testTLS(t))), wantErrs: []string{"both set"}},
+		{name: "TLS without certificate", opts: withoutInsecure(baseOpts(TLS(&tls.Config{}))), wantErrs: []string{"no certificate"}},
+		{name: "valid TLS", opts: withoutInsecure(baseOpts(TLS(testTLS(t))))},
+		{name: "empty addr", opts: baseOpts(Addr("")), wantErrs: []string{"addr is required"}},
+		{name: "zero read header timeout", opts: baseOpts(ReadHeaderTimeout(0)), wantErrs: []string{"read header timeout"}},
+		{name: "zero idle timeout", opts: baseOpts(IdleTimeout(0)), wantErrs: []string{"idle timeout"}},
+		{name: "zero rpc default timeout", opts: baseOpts(RPCDefaultTimeout(0)), wantErrs: []string{"rpc default timeout"}},
+		{name: "zero rpc max timeout", opts: baseOpts(RPCMaxTimeout(0)), wantErrs: []string{"rpc max timeout"}},
+		{
+			name:     "default timeout above max",
+			opts:     baseOpts(RPCDefaultTimeout(time.Minute), RPCMaxTimeout(time.Second)),
+			wantErrs: []string{"exceeds rpc max timeout"},
+		},
+		{name: "zero max message bytes", opts: baseOpts(MaxMessageBytes(0)), wantErrs: []string{"max message bytes"}},
 		{name: "nil service", opts: baseOpts(Services(nil)), wantErrs: []string{"service 0 is nil"}},
 		{name: "empty service name", opts: baseOpts(Services(&fakeService{rec: rec})), wantErrs: []string{"empty name"}},
 		{
@@ -73,7 +89,7 @@ func TestNewEnvDefaultsAndPrecedence(t *testing.T) {
 	t.Setenv("SVC_SHUTDOWN_TIMEOUT", "7s")
 	t.Setenv("SVC_HANDLE_SIGNALS", "false")
 
-	a, err := New(Version("4.0.0"))
+	a, err := New(Version("4.0.0"), Insecure())
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -92,5 +108,28 @@ func TestNewBadEnv(t *testing.T) {
 
 	if _, err := New(baseOpts()...); !errors.Is(err, ErrInvalidConfig) {
 		t.Errorf("New() error = %v, want ErrInvalidConfig", err)
+	}
+}
+
+// withoutInsecure turns off the Insecure option that baseOpts sets.
+func withoutInsecure(opts []Option) []Option {
+	return append(opts, func(o *options) { o.insecure = false })
+}
+
+func TestTLSConfigIsHardened(t *testing.T) {
+	in := testTLS(t)
+	in.MinVersion = tls.VersionTLS10
+
+	a, err := New(withoutInsecure(baseOpts(TLS(in)))...)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if a.opts.tls.MinVersion != tls.VersionTLS12 {
+		t.Errorf("MinVersion = %x, want TLS 1.2", a.opts.tls.MinVersion)
+	}
+
+	if in.MinVersion != tls.VersionTLS10 {
+		t.Error("New changed the caller's TLS config")
 	}
 }

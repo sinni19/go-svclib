@@ -14,5 +14,6 @@ Each ADR records one decision: context, decision, and consequences. An ADR is no
 | [0008](0008-scheduled-jobs-redis-lock.md) | Scheduled jobs: Redis lock with TTL | Accepted |
 | [0009](0009-single-module-and-config.md) | One Go module; options in code with env defaults | Accepted |
 | [0010](0010-lifecycle-launch-shutdown.md) | Lifecycle: Launch, Shutdown, and rollback | Accepted |
+| [0011](0011-transport-server-and-interceptors.md) | Transport: server, plaintext mode, and interceptor chain | Accepted |
 
 Template: [template.md](template.md).

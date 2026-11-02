@@ -22,6 +22,7 @@ func Example() {
 		svc.LogWriter(io.Discard),
 		svc.HandleSignals(false),
 		svc.DrainDelay(0),
+		svc.Insecure(),
 	)
 	if err != nil {
 		fmt.Println(err)

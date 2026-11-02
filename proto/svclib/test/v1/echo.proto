@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+// Package svclib.test.v1 is a test service for go-svclib's own tests.
+package svclib.test.v1;
+
+import "buf/validate/validate.proto";
+import "google/api/annotations.proto";
+
+option go_package = "github.com/sinni19/go-svclib/internal/gen/svclib/test/v1;testv1";
+
+// EchoService returns what it receives.
+service EchoService {
+  // Echo returns the request message.
+  rpc Echo(EchoRequest) returns (EchoResponse) {
+    option (google.api.http) = {
+      post: "/v1/echo"
+      body: "*"
+    };
+  }
+
+  // EchoStream returns each message that it receives.
+  rpc EchoStream(stream EchoStreamRequest) returns (stream EchoStreamResponse);
+}
+
+// EchoRequest is the request of Echo.
+message EchoRequest {
+  string message = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+  }];
+}
+
+// EchoResponse is the response of Echo.
+message EchoResponse {
+  string message = 1;
+}
+
+// EchoStreamRequest is one request message of EchoStream.
+message EchoStreamRequest {
+  string message = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+  }];
+}
+
+// EchoStreamResponse is one response message of EchoStream.
+message EchoStreamResponse {
+  string message = 1;
+}

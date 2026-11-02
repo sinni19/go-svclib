@@ -1,0 +1,10 @@
+version: v2
+clean: true
+plugins:
+  # go tool runs the plugin versions pinned in go.mod, so generated code matches the runtime.
+  - local: ["go", "tool", "protoc-gen-go"]
+    out: internal/gen
+    opt: paths=source_relative
+  - local: ["go", "tool", "protoc-gen-connect-go"]
+    out: internal/gen
+    opt: paths=source_relative
